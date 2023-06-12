@@ -1,4 +1,8 @@
 # RNWhatsAppStickers
+
+## Original Repo https://github.com/Jobeso/react-native-whatsapp-stickers 
+## This repo is supposed to have the same implementation but just from a url instead of locally. This repo will prob be a pr into the original repo one day when i have more time, although i don't think using local assets makes any sense since you need to go thru the app store each time for any new sticker. Also this repo will work on the latest m1 chip macs which the origional repo doesn't.
+
 ## Getting started
 
 `$ npm install react-native-whatsapp-stickers --save`
