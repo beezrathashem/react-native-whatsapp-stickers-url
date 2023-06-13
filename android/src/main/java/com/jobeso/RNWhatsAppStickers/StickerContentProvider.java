@@ -219,36 +219,73 @@ public class StickerContentProvider extends ContentProvider {
         return cursor;
     }
 
-    private AssetFileDescriptor getImageAsset(Uri uri) throws IllegalArgumentException {
-        AssetManager am = Objects.requireNonNull(getContext()).getAssets();
-        final List<String> pathSegments = uri.getPathSegments();
-        if (pathSegments.size() != 3) {
-            throw new IllegalArgumentException("path segments should be 3, uri is: " + uri);
-        }
-        String fileName = pathSegments.get(pathSegments.size() - 1);
-        final String identifier = pathSegments.get(pathSegments.size() - 2);
-        if (TextUtils.isEmpty(identifier)) {
-            throw new IllegalArgumentException("identifier is empty, uri: " + uri);
-        }
-        if (TextUtils.isEmpty(fileName)) {
-            throw new IllegalArgumentException("file name is empty, uri: " + uri);
-        }
-        //making sure the file that is trying to be fetched is in the list of stickers.
-        for (StickerPack stickerPack : getStickerPackList()) {
-            if (identifier.equals(stickerPack.identifier)) {
-                if (fileName.equals(stickerPack.trayImageFile)) {
-                    return fetchFile(uri, am, fileName, identifier);
-                } else {
-                    for (Sticker sticker : stickerPack.getStickers()) {
-                        if (fileName.equals(sticker.imageFileName)) {
-                            return fetchFile(uri, am, fileName, identifier);
-                        }
+private AssetFileDescriptor getImageAsset(Uri uri) throws IllegalArgumentException {
+    AssetFileDescriptor assetFileDescriptor = null;
+    final List<String> pathSegments = uri.getPathSegments();
+    if (pathSegments.size() != 3) {
+        throw new IllegalArgumentException("path segments should be 3, uri is: " + uri);
+    }
+    String fileName = pathSegments.get(pathSegments.size() - 1);
+    final String identifier = pathSegments.get(pathSegments.size() - 2);
+    if (TextUtils.isEmpty(identifier)) {
+        throw new IllegalArgumentException("identifier is empty, uri: " + uri);
+    }
+    if (TextUtils.isEmpty(fileName)) {
+        throw new IllegalArgumentException("file name is empty, uri: " + uri);
+    }
+    //making sure the file that is trying to be fetched is in the list of stickers.
+    for (StickerPack stickerPack : getStickerPackList()) {
+        if (identifier.equals(stickerPack.identifier)) {
+            if (fileName.equals(stickerPack.trayImageFile)) {
+                assetFileDescriptor = fetchImageFromUrl(uri, stickerPack.trayImageUrl);
+                break;
+            } else {
+                for (Sticker sticker : stickerPack.getStickers()) {
+                    if (fileName.equals(sticker.imageFileName)) {
+                        assetFileDescriptor = fetchImageFromUrl(uri, sticker.imageFileUrl);
+                        break;
                     }
                 }
             }
         }
-        return null;
     }
+    return assetFileDescriptor;
+}
+
+private AssetFileDescriptor fetchImageFromUrl(Uri uri, String imageUrl) {
+    HttpURLConnection connection = null;
+    try {
+        URL url = new URL(imageUrl);
+        connection = (HttpURLConnection) url.openConnection();
+        connection.setDoInput(true);
+        connection.connect();
+
+        Bitmap bitmap = BitmapFactory.decodeStream(connection.getInputStream());
+        byte[] byteArray = getByteArrayFromBitmap(bitmap);
+
+        ParcelFileDescriptor fileDescriptor = createParcelFileDescriptor(byteArray);
+        return new AssetFileDescriptor(fileDescriptor, 0, byteArray.length);
+    } catch (IOException e) {
+        Log.e(Objects.requireNonNull(getContext()).getPackageName(), "IOException when fetching image from URL, uri:" + uri, e);
+    } finally {
+        if (connection != null) {
+            connection.disconnect();
+        }
+    }
+    return null;
+}
+
+private byte[] getByteArrayFromBitmap(Bitmap bitmap) {
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    bitmap.compress(Bitmap.CompressFormat.WEBP, 100, outputStream);
+    return outputStream.toByteArray();
+}
+
+private ParcelFileDescriptor createParcelFileDescriptor(byte[] byteArray) throws IOException {
+    MemoryFile memoryFile = new MemoryFile("temp", byteArray.length);
+    memoryFile.writeBytes(byteArray, 0, 0, byteArray.length);
+    return ParcelFileDescriptor.dup(memoryFile.getFileDescriptor());
+}
 
     private AssetFileDescriptor fetchFile(@NonNull Uri uri, @NonNull AssetManager am, @NonNull String fileName, @NonNull String identifier) {
         try {
