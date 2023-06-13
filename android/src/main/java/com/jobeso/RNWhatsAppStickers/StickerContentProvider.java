@@ -7,6 +7,10 @@
  */
 
 package com.jobeso.RNWhatsAppStickers;
+import org.json.JSONObject;
+import org.json.JSONException;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 
 import android.content.ContentProvider;
 import android.content.ContentResolver;
@@ -73,27 +77,27 @@ public class StickerContentProvider extends ContentProvider {
 
     @Override
     public boolean onCreate() {
-        final String authority = RNWhatsAppStickersModule.getContentProviderAuthority(getContext());
-        if (!authority.startsWith(Objects.requireNonNull(getContext()).getPackageName())) {
-            throw new IllegalStateException("your authority (" + authority + ") for the content provider should start with your package name: " + getContext().getPackageName());
-        }
+        // final String authority = RNWhatsAppStickersModule.getContentProviderAuthority(getContext());
+        // if (!authority.startsWith(Objects.requireNonNull(getContext()).getPackageName())) {
+        //     throw new IllegalStateException("your authority (" + authority + ") for the content provider should start with your package name: " + getContext().getPackageName());
+        // }
 
-        //the call to get the metadata for the sticker packs.
-        MATCHER.addURI(authority, METADATA, METADATA_CODE);
+        // //the call to get the metadata for the sticker packs.
+        // MATCHER.addURI(authority, METADATA, METADATA_CODE);
 
-        //the call to get the metadata for single sticker pack. * represent the identifier
-        MATCHER.addURI(authority, METADATA + "/*", METADATA_CODE_FOR_SINGLE_PACK);
+        // //the call to get the metadata for single sticker pack. * represent the identifier
+        // MATCHER.addURI(authority, METADATA + "/*", METADATA_CODE_FOR_SINGLE_PACK);
 
-        //gets the list of stickers for a sticker pack, * respresent the identifier.
-        MATCHER.addURI(authority, STICKERS + "/*", STICKERS_CODE);
+        // //gets the list of stickers for a sticker pack, * respresent the identifier.
+        // MATCHER.addURI(authority, STICKERS + "/*", STICKERS_CODE);
 
-        for (StickerPack stickerPack : getStickerPackList()) {
-            MATCHER.addURI(authority, STICKERS_ASSET + "/" + stickerPack.identifier + "/" + stickerPack.trayImageFile, STICKER_PACK_TRAY_ICON_CODE);
-            for (Sticker sticker : stickerPack.getStickers()) {
-                MATCHER.addURI(authority, STICKERS_ASSET + "/" + stickerPack.identifier + "/" + sticker.imageFileName, STICKERS_ASSET_CODE);
-            }
-        }
-
+        // for (StickerPack stickerPack : getStickerPackList()) {
+        //     MATCHER.addURI(authority, STICKERS_ASSET + "/" + stickerPack.identifier + "/" + stickerPack.trayImageFile, STICKER_PACK_TRAY_ICON_CODE);
+        //     for (Sticker sticker : stickerPack.getStickers()) {
+        //         MATCHER.addURI(authority, STICKERS_ASSET + "/" + stickerPack.identifier + "/" + sticker.imageFileName, STICKERS_ASSET_CODE);
+        //     }
+        // }
+        
         return true;
     }
 
@@ -142,17 +146,33 @@ public class StickerContentProvider extends ContentProvider {
         }
     }
 
-    private synchronized void readContentFile(@NonNull Context context) {
-        try (InputStream contentsInputStream = context.getAssets().open(CONTENT_FILE_NAME)) {
-            stickerPackList = ContentFileParser.parseStickerPacks(contentsInputStream);
-        } catch (IOException | IllegalStateException e) {
-            throw new RuntimeException(CONTENT_FILE_NAME + " file has some issues: " + e.getMessage(), e);
-        }
+public void initializeStickerPackList(String contentsJson) {
+    readContentFile(getContext(), contentsJson);
+}
+
+public InputStream getJsonStreamFromAsset(Context context, String filename) {
+    AssetManager assetManager = context.getAssets();
+    try {
+        return assetManager.open(filename);
+    } catch (IOException e) {
+        e.printStackTrace();
     }
+    return null;
+}
+
+void readContentFile(@NonNull Context context, String contentsJson) {
+    try {
+        InputStream contents = new ByteArrayInputStream(contentsJson.getBytes(StandardCharsets.UTF_8.name()));
+        // Parse contents into stickerPackList
+        stickerPackList = ContentFileParser.parseStickerPacks(contents);
+    } catch (IOException e) {
+        throw new RuntimeException("Error parsing contents.json: " + e.getMessage(), e);
+    }
+}
 
     public List<StickerPack> getStickerPackList() {
         if (stickerPackList == null) {
-            readContentFile(Objects.requireNonNull(getContext()));
+            stickerPackList = new ArrayList<>();
         }
         return stickerPackList;
     }
@@ -170,6 +190,10 @@ public class StickerContentProvider extends ContentProvider {
         }
 
         return getStickerPackInfo(uri, new ArrayList<StickerPack>());
+    }
+
+    public void addStickerPack(StickerPack stickerPack) {
+        getStickerPackList().add(stickerPack);
     }
 
     @NonNull
@@ -219,73 +243,36 @@ public class StickerContentProvider extends ContentProvider {
         return cursor;
     }
 
-private AssetFileDescriptor getImageAsset(Uri uri) throws IllegalArgumentException {
-    AssetFileDescriptor assetFileDescriptor = null;
-    final List<String> pathSegments = uri.getPathSegments();
-    if (pathSegments.size() != 3) {
-        throw new IllegalArgumentException("path segments should be 3, uri is: " + uri);
-    }
-    String fileName = pathSegments.get(pathSegments.size() - 1);
-    final String identifier = pathSegments.get(pathSegments.size() - 2);
-    if (TextUtils.isEmpty(identifier)) {
-        throw new IllegalArgumentException("identifier is empty, uri: " + uri);
-    }
-    if (TextUtils.isEmpty(fileName)) {
-        throw new IllegalArgumentException("file name is empty, uri: " + uri);
-    }
-    //making sure the file that is trying to be fetched is in the list of stickers.
-    for (StickerPack stickerPack : getStickerPackList()) {
-        if (identifier.equals(stickerPack.identifier)) {
-            if (fileName.equals(stickerPack.trayImageFile)) {
-                assetFileDescriptor = fetchImageFromUrl(uri, stickerPack.trayImageUrl);
-                break;
-            } else {
-                for (Sticker sticker : stickerPack.getStickers()) {
-                    if (fileName.equals(sticker.imageFileName)) {
-                        assetFileDescriptor = fetchImageFromUrl(uri, sticker.imageFileUrl);
-                        break;
+    private AssetFileDescriptor getImageAsset(Uri uri) throws IllegalArgumentException {
+        AssetManager am = Objects.requireNonNull(getContext()).getAssets();
+        final List<String> pathSegments = uri.getPathSegments();
+        if (pathSegments.size() != 3) {
+            throw new IllegalArgumentException("path segments should be 3, uri is: " + uri);
+        }
+        String fileName = pathSegments.get(pathSegments.size() - 1);
+        final String identifier = pathSegments.get(pathSegments.size() - 2);
+        if (TextUtils.isEmpty(identifier)) {
+            throw new IllegalArgumentException("identifier is empty, uri: " + uri);
+        }
+        if (TextUtils.isEmpty(fileName)) {
+            throw new IllegalArgumentException("file name is empty, uri: " + uri);
+        }
+        //making sure the file that is trying to be fetched is in the list of stickers.
+        for (StickerPack stickerPack : getStickerPackList()) {
+            if (identifier.equals(stickerPack.identifier)) {
+                if (fileName.equals(stickerPack.trayImageFile)) {
+                    return fetchFile(uri, am, fileName, identifier);
+                } else {
+                    for (Sticker sticker : stickerPack.getStickers()) {
+                        if (fileName.equals(sticker.imageFileName)) {
+                            return fetchFile(uri, am, fileName, identifier);
+                        }
                     }
                 }
             }
         }
+        return null;
     }
-    return assetFileDescriptor;
-}
-
-private AssetFileDescriptor fetchImageFromUrl(Uri uri, String imageUrl) {
-    HttpURLConnection connection = null;
-    try {
-        URL url = new URL(imageUrl);
-        connection = (HttpURLConnection) url.openConnection();
-        connection.setDoInput(true);
-        connection.connect();
-
-        Bitmap bitmap = BitmapFactory.decodeStream(connection.getInputStream());
-        byte[] byteArray = getByteArrayFromBitmap(bitmap);
-
-        ParcelFileDescriptor fileDescriptor = createParcelFileDescriptor(byteArray);
-        return new AssetFileDescriptor(fileDescriptor, 0, byteArray.length);
-    } catch (IOException e) {
-        Log.e(Objects.requireNonNull(getContext()).getPackageName(), "IOException when fetching image from URL, uri:" + uri, e);
-    } finally {
-        if (connection != null) {
-            connection.disconnect();
-        }
-    }
-    return null;
-}
-
-private byte[] getByteArrayFromBitmap(Bitmap bitmap) {
-    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    bitmap.compress(Bitmap.CompressFormat.WEBP, 100, outputStream);
-    return outputStream.toByteArray();
-}
-
-private ParcelFileDescriptor createParcelFileDescriptor(byte[] byteArray) throws IOException {
-    MemoryFile memoryFile = new MemoryFile("temp", byteArray.length);
-    memoryFile.writeBytes(byteArray, 0, 0, byteArray.length);
-    return ParcelFileDescriptor.dup(memoryFile.getFileDescriptor());
-}
 
     private AssetFileDescriptor fetchFile(@NonNull Uri uri, @NonNull AssetManager am, @NonNull String fileName, @NonNull String identifier) {
         try {

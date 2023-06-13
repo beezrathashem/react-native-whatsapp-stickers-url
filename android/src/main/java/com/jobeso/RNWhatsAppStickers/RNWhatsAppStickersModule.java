@@ -1,6 +1,9 @@
 
 package com.jobeso.RNWhatsAppStickers;
 
+import org.json.JSONObject;
+import org.json.JSONException;
+
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -46,28 +49,33 @@ public class RNWhatsAppStickersModule extends ReactContextBaseJavaModule {
     return context.getPackageName() + ".stickercontentprovider";
   }
 
-  @ReactMethod
-  public void send(String identifier, String stickerPackName, Promise promise) {
-    Intent intent = new Intent();
-    intent.setAction("com.whatsapp.intent.action.ENABLE_STICKER_PACK");
-    intent.putExtra(EXTRA_STICKER_PACK_ID, identifier);
-    intent.putExtra(EXTRA_STICKER_PACK_AUTHORITY, getContentProviderAuthority(reactContext));
-    intent.putExtra(EXTRA_STICKER_PACK_NAME, stickerPackName);
+@ReactMethod
+public void send(String identifier, String stickerPackName, String jsonContent, Promise promise) {
+  Intent intent = new Intent();
+  intent.setAction("com.whatsapp.intent.action.ENABLE_STICKER_PACK");
+  intent.putExtra(EXTRA_STICKER_PACK_ID, identifier);
+  intent.putExtra(EXTRA_STICKER_PACK_AUTHORITY, getContentProviderAuthority(reactContext));
+  intent.putExtra(EXTRA_STICKER_PACK_NAME, stickerPackName);
+  intent.putExtra("jsonContent", jsonContent);
 
-    try {
-      Activity activity = getCurrentActivity();
-      ResolveInfo should = activity.getPackageManager().resolveActivity(intent, 0);
-      if (should != null) {
-        activity.startActivityForResult(intent, ADD_PACK);
-        promise.resolve("OK");
-      } else {
-        promise.resolve("OK, but not opened");
-      }
-    } catch (ActivityNotFoundException e) {
-      promise.reject(ERROR_ADDING_STICKER_PACK, e);
-    } catch  (Exception e){
-      promise.reject(ERROR_ADDING_STICKER_PACK, e);
+
+ StickerContentProvider stickerContentProvider = new StickerContentProvider();
+    stickerContentProvider.initializeStickerPackList(jsonContent);
+
+  try {
+    Activity activity = getCurrentActivity();
+    ResolveInfo should = activity.getPackageManager().resolveActivity(intent, 0);
+    if (should != null) {
+      activity.startActivityForResult(intent, ADD_PACK);
+      promise.resolve("OK");
+    } else {
+      promise.resolve("OK, but not opened");
     }
+  } catch (ActivityNotFoundException e) {
+    promise.reject(ERROR_ADDING_STICKER_PACK, e);
+  } catch  (Exception e){
+    promise.reject(ERROR_ADDING_STICKER_PACK, e);
   }
+}
 
 }
