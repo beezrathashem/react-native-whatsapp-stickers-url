@@ -11,8 +11,6 @@ package com.jobeso.RNWhatsAppStickers;
 import androidx.annotation.NonNull;
 import android.text.TextUtils;
 import android.util.JsonReader;
-import org.json.JSONObject;
-import org.json.JSONException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -156,19 +154,19 @@ class ContentFileParser {
                     }
                     reader.endArray();
                 } else {
-                    // throw new IllegalStateException("unknown field in json: " + key);
+                    throw new IllegalStateException("unknown field in json: " + key);
                 }
             }
             reader.endObject();
             if (TextUtils.isEmpty(imageFile)) {
                 throw new IllegalStateException("sticker image_file cannot be empty");
             }
-            // if (!imageFile.endsWith(".webp")) {
-            //     throw new IllegalStateException("image file for stickers should be webp files, image file is: " + imageFile);
-            // }
-            // if (imageFile.contains("..") || imageFile.contains("/")) {
-            //     throw new IllegalStateException("the file name should not contain .. or / to prevent directory traversal, image file is:" + imageFile);
-            // }
+            if (!imageFile.endsWith(".webp")) {
+                throw new IllegalStateException("image file for stickers should be webp files, image file is: " + imageFile);
+            }
+            if (imageFile.contains("..") || imageFile.contains("/")) {
+                throw new IllegalStateException("the file name should not contain .. or / to prevent directory traversal, image file is:" + imageFile);
+            }
             stickerList.add(new Sticker(imageFile, emojis));
         }
         reader.endArray();

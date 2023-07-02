@@ -7,10 +7,6 @@
  */
 
 package com.jobeso.RNWhatsAppStickers;
-import org.json.JSONObject;
-import org.json.JSONException;
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
 
 import android.content.ContentProvider;
 import android.content.ContentResolver;
@@ -77,27 +73,27 @@ public class StickerContentProvider extends ContentProvider {
 
     @Override
     public boolean onCreate() {
-        // final String authority = RNWhatsAppStickersModule.getContentProviderAuthority(getContext());
-        // if (!authority.startsWith(Objects.requireNonNull(getContext()).getPackageName())) {
-        //     throw new IllegalStateException("your authority (" + authority + ") for the content provider should start with your package name: " + getContext().getPackageName());
-        // }
+        final String authority = RNWhatsAppStickersModule.getContentProviderAuthority(getContext());
+        if (!authority.startsWith(Objects.requireNonNull(getContext()).getPackageName())) {
+            throw new IllegalStateException("your authority (" + authority + ") for the content provider should start with your package name: " + getContext().getPackageName());
+        }
 
-        // //the call to get the metadata for the sticker packs.
-        // MATCHER.addURI(authority, METADATA, METADATA_CODE);
+        //the call to get the metadata for the sticker packs.
+        MATCHER.addURI(authority, METADATA, METADATA_CODE);
 
-        // //the call to get the metadata for single sticker pack. * represent the identifier
-        // MATCHER.addURI(authority, METADATA + "/*", METADATA_CODE_FOR_SINGLE_PACK);
+        //the call to get the metadata for single sticker pack. * represent the identifier
+        MATCHER.addURI(authority, METADATA + "/*", METADATA_CODE_FOR_SINGLE_PACK);
 
-        // //gets the list of stickers for a sticker pack, * respresent the identifier.
-        // MATCHER.addURI(authority, STICKERS + "/*", STICKERS_CODE);
+        //gets the list of stickers for a sticker pack, * respresent the identifier.
+        MATCHER.addURI(authority, STICKERS + "/*", STICKERS_CODE);
 
-        // for (StickerPack stickerPack : getStickerPackList()) {
-        //     MATCHER.addURI(authority, STICKERS_ASSET + "/" + stickerPack.identifier + "/" + stickerPack.trayImageFile, STICKER_PACK_TRAY_ICON_CODE);
-        //     for (Sticker sticker : stickerPack.getStickers()) {
-        //         MATCHER.addURI(authority, STICKERS_ASSET + "/" + stickerPack.identifier + "/" + sticker.imageFileName, STICKERS_ASSET_CODE);
-        //     }
-        // }
-        
+        for (StickerPack stickerPack : getStickerPackList()) {
+            MATCHER.addURI(authority, STICKERS_ASSET + "/" + stickerPack.identifier + "/" + stickerPack.trayImageFile, STICKER_PACK_TRAY_ICON_CODE);
+            for (Sticker sticker : stickerPack.getStickers()) {
+                MATCHER.addURI(authority, STICKERS_ASSET + "/" + stickerPack.identifier + "/" + sticker.imageFileName, STICKERS_ASSET_CODE);
+            }
+        }
+
         return true;
     }
 
@@ -146,33 +142,17 @@ public class StickerContentProvider extends ContentProvider {
         }
     }
 
-public void initializeStickerPackList(String contentsJson) {
-    readContentFile(getContext(), contentsJson);
-}
-
-public InputStream getJsonStreamFromAsset(Context context, String filename) {
-    AssetManager assetManager = context.getAssets();
-    try {
-        return assetManager.open(filename);
-    } catch (IOException e) {
-        e.printStackTrace();
+    private synchronized void readContentFile(@NonNull Context context) {
+        try (InputStream contentsInputStream = context.getAssets().open(CONTENT_FILE_NAME)) {
+            stickerPackList = ContentFileParser.parseStickerPacks(contentsInputStream);
+        } catch (IOException | IllegalStateException e) {
+            throw new RuntimeException(CONTENT_FILE_NAME + " file has some issues: " + e.getMessage(), e);
+        }
     }
-    return null;
-}
-
-void readContentFile(@NonNull Context context, String contentsJson) {
-    try {
-        InputStream contents = new ByteArrayInputStream(contentsJson.getBytes(StandardCharsets.UTF_8.name()));
-        // Parse contents into stickerPackList
-        stickerPackList = ContentFileParser.parseStickerPacks(contents);
-    } catch (IOException e) {
-        throw new RuntimeException("Error parsing contents.json: " + e.getMessage(), e);
-    }
-}
 
     public List<StickerPack> getStickerPackList() {
         if (stickerPackList == null) {
-            stickerPackList = new ArrayList<>();
+            readContentFile(Objects.requireNonNull(getContext()));
         }
         return stickerPackList;
     }
@@ -190,10 +170,6 @@ void readContentFile(@NonNull Context context, String contentsJson) {
         }
 
         return getStickerPackInfo(uri, new ArrayList<StickerPack>());
-    }
-
-    public void addStickerPack(StickerPack stickerPack) {
-        getStickerPackList().add(stickerPack);
     }
 
     @NonNull
