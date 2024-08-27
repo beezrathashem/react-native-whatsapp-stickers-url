@@ -1,11 +1,11 @@
-
 buildscript {
     repositories {
-        jcenter()
+        google()
+        mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle'
+        classpath 'com.android.tools.build:gradle:8.1.1'  // Specify a specific version
     }
 }
 
@@ -28,9 +28,9 @@ android {
 
 repositories {
     mavenCentral()
+    google()
 }
 
 dependencies {
     implementation 'com.facebook.react:react-native:+'
 }
-  
